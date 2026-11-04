@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>逆ポーランド記法 (RPN) 構造視覚化 & 計算機</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #f4f7f6; color: #333; }
+
+        .app-container {
+            max-width: 980px; height: 700px; margin: 0 auto; padding: 10px;
+            display: flex; flex-direction: column; justify-content: flex-start;
+        }
+
+        h1 { text-align: center; color: #2c3e50; margin: 0 0 8px 0; font-size: 1.3rem; }
+
+        .control-panel {
+            background: white; padding: 8px 15px; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 6px;
+            display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center;
+        }
+        input[type="text"] {
+            font-size: 0.95rem; padding: 6px 10px; border: 1.5px solid #ddd;
+            border-radius: 5px; flex-grow: 1; min-width: 180px;
+        }
+        select, button {
+            font-size: 0.9rem; padding: 6px 12px; border: none;
+            border-radius: 5px; cursor: pointer; background: #3498db; color: white;
+            transition: background 0.2s;
+        }
+        button:hover { background: #2980b9; }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .calc-btn { background: #2ecc71; }
+        .calc-btn:hover { background: #27ae60; }
+
+        .input-tokens-panel {
+            background: #ffffff; border: 1.5px solid #34495e; padding: 6px 12px;
+            border-radius: 8px; margin-bottom: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .input-tokens-header { font-weight: bold; color: #2c3e50; font-size: 0.85rem; white-space: nowrap; }
+        .input-tokens-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; flex-grow: 1; }
+
+        .var-inputs-panel {
+            background: #eef9f5; border: 1px solid #a3e4d7; padding: 6px 12px;
+            border-radius: 8px; margin-bottom: 6px; display: none;
+            align-items: center; justify-content: space-between; gap: 10px;
+        }
+        .rpn-formula-box { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+        .rpn-badge {
+            background: #16a085; color: white; padding: 2px 8px; border-radius: 4px;
+            font-family: monospace; font-size: 1rem; letter-spacing: 1px; font-weight: bold;
+        }
+        .var-row { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; }
+        .var-inputs-container { display: flex; gap: 8px; }
+        .var-input-item { display: flex; align-items: center; gap: 2px; font-weight: bold; }
+        .var-input-item input { width: 48px; padding: 3px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; }
+
+        .workspace {
+            display: flex; gap: 12px; flex-grow: 1; justify-content: center; align-items: stretch; min-height: 0;
+        }
+
+        .stack-container {
+            width: 170px; background: white; padding: 10px; border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; align-items: center;
+        }
+        .stack-title { font-weight: bold; margin-bottom: 6px; color: #2c3e50; font-size: 0.9rem; }
+        .stack-tube {
+            width: 95px; flex-grow: 1; border: 3px solid #34495e;
+            border-top: none; border-radius: 0 0 12px 12px;
+            display: flex; flex-direction: column-reverse; align-items: center;
+            padding: 4px; gap: 4px; background: #fafafa; overflow: hidden; position: relative;
+        }
+
+        .token-item {
+            width: 72px; height: 28px; color: white;
+            font-weight: bold; font-size: 0.95rem; display: flex;
+            align-items: center; justify-content: center; border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: all 0.25s ease; flex-shrink: 0;
+        }
+        .token-item.operand { background: #2ecc71; }
+        .token-item.operator { background: #e67e22; }
+        .token-item.parenthesis { background: #9b59b6; }
+        .token-item.number { background: #3498db; }
+        .token-item.active-target { transform: scale(1.08); box-shadow: 0 0 8px #f1c40f; }
+        .token-item.processed { opacity: 0.35; filter: grayscale(50%); }
+
+        .flying-token {
+            position: fixed !important; z-index: 9999 !important; pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1) !important;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.25) !important;
+        }
+
+        .output-container {
+            flex-grow: 1; max-width: 600px; background: white; padding: 12px 15px;
+            border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex;
+            flex-direction: column; justify-content: flex-start; overflow: hidden;
+        }
+        .active-rpn-banner {
+            background: #ebf5fb; border-left: 4px solid #3498db; padding: 4px 10px;
+            margin-bottom: 8px; font-weight: bold; border-radius: 0 4px 4px 0; color: #2980b9; font-size: 0.85rem;
+        }
+        .status-box {
+            font-size: 0.95rem; padding: 8px 12px; background: #ecf0f1;
+            border-left: 4px solid #3498db; border-radius: 4px; margin-bottom: 8px; min-height: 38px;
+        }
+
+        .calc-stage-container {
+            background: #fff8e7; border: 1.5px dashed #f39c12; border-radius: 8px;
+            padding: 8px; margin-bottom: 8px; text-align: center; display: none;
+        }
+        .calc-stage-title { font-weight: bold; color: #d35400; margin-bottom: 4px; font-size: 0.85rem; }
+        .calc-stage-row {
+            display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: bold;
+        }
+        .calc-box {
+            min-width: 48px; height: 32px; border-radius: 5px; display: flex;
+            align-items: center; justify-content: center; padding: 0 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12); font-size: 0.95rem;
+        }
+        .calc-box.val { background: #3498db; color: white; }
+        .calc-box.op { background: #e67e22; color: white; }
+        .calc-box.res { background: #2ecc71; color: white; }
+
+        h3.section-title { font-size: 0.9rem; margin: 4px 0; color: #2c3e50; }
+        .output-queue {
+            display: flex; flex-wrap: wrap; gap: 6px; min-height: 42px;
+            padding: 6px; border: 1.5px dashed #bdc3c7; border-radius: 6px; align-items: center;
+        }
+
+        /* 上につめるため margin-top: auto から 8px に変更 */
+        .step-history {
+            margin-top: 8px; flex-grow: 1; max-height: 220px; overflow-y: auto;
+            border-top: 1px solid #eee; padding-top: 6px; font-size: 0.8rem; color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <h1>逆ポーランド記法 (RPN) 構造視覚化 & 計算機</h1>
+
+        <div class="control-panel">
+            <select id="modeSelect">
+                <option value="infix_to_rpn">中置記法 ➔ RPN (例: 1 + 2 * 3)</option>
+                <option value="rpn_to_infix">RPN ➔ 中置記法 (例: 1 2 3 * +)</option>
+            </select>
+            <input type="text" id="exprInput" value="1 + 2 * 3" placeholder="式を入力">
+            <button id="startBtn">構文変換</button>
+            <button id="prevBtn" disabled>前へ</button>
+            <button id="nextBtn" disabled>次へ</button>
+            <button id="autoBtn" disabled>自動再生</button>
+        </div>
+
+        <div class="input-tokens-panel">
+            <div class="input-tokens-header">📥 処理待ちトークン:</div>
+            <div class="input-tokens-row" id="inputTokensRow"></div>
+        </div>
+
+        <div class="var-inputs-panel" id="varPanel">
+            <div class="rpn-formula-box">
+                <span>対象RPN:</span>
+                <span class="rpn-badge" id="rpnFormulaDisplay"></span>
+            </div>
+            <div class="var-row">
+                <span>変数値:</span>
+                <div class="var-inputs-container" id="varInputsContainer"></div>
+                <button class="calc-btn" id="runCalcBtn">計算実行 ➔</button>
+            </div>
+        </div>
+
+        <div class="workspace">
+            <div class="stack-container">
+                <div class="stack-title">スタック領域 (Push/Pop)</div>
+                <div class="stack-tube" id="stackTube"></div>
+            </div>
+
+            <div class="output-container">
+                <div class="active-rpn-banner" id="activeRpnBanner" style="display: none;">
+                    計算対象 RPN: <span id="bannerRpnText"></span>
+                </div>
+
+                <div class="status-box" id="statusDesc">「構文変換」または「計算実行」を押すと開始します。</div>
+
+                <div class="calc-stage-container" id="calcStageContainer">
+                    <div class="calc-stage-title">⚙️ Popされた項と演算の実行ステージ</div>
+                    <div class="calc-stage-row" id="calcStageRow"></div>
+                </div>
+
+                <h3 class="section-title" id="outputTitle">展開後の出力結果</h3>
+                <div class="output-queue" id="outputQueue"></div>
+
+                <div class="step-history" id="stepHistory"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let steps = [];
+        let currentStepIndex = 0;
+        let autoTimer = null;
+        let lastRPNTokens = [];
+        let isEvalMode = false;
+        let originalTokens = [];
+
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            isEvalMode = false;
+            const expr = document.getElementById('exprInput').value;
+            const mode = document.getElementById('modeSelect').value;
+
+            const res = await fetch('/convert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ expression: expr, mode: mode })
+            });
+            const data = await res.json();
+            steps = data.steps;
+            currentStepIndex = 0;
+
+            originalTokens = expr.match(/\d+\.\d+|\d+|[A-Za-z]+|[\+\-\*\/\^\(\)]/g) || [];
+            renderInputTokens(originalTokens);
+
+            const finalStep = steps[steps.length - 1];
+            if (mode === 'infix_to_rpn' && finalStep) {
+                lastRPNTokens = finalStep.output;
+                setupVariableInputs(lastRPNTokens);
+            } else {
+                document.getElementById('varPanel').style.display = 'none';
+            }
+
+            document.getElementById('calcStageContainer').style.display = 'none';
+            document.getElementById('activeRpnBanner').style.display = 'none';
+            document.getElementById('outputTitle').innerText = "展開後の出力結果";
+            document.getElementById('outputQueue').style.display = 'flex';
+            enableControls();
+            renderStep(currentStepIndex, false);
+        });
+
+        function setupVariableInputs(tokens) {
+            const rpnString = tokens.join(' ');
+            document.getElementById('rpnFormulaDisplay').innerText = rpnString;
+
+            const variables = [...new Set(tokens.filter(t => /^[A-Za-z]+$/.test(t)))];
+            const container = document.getElementById('varInputsContainer');
+            container.innerHTML = '';
+
+            if (variables.length > 0) {
+                let defaultVal = 10;
+                variables.forEach((v) => {
+                    const div = document.createElement('div');
+                    div.className = 'var-input-item';
+                    div.innerHTML = `${v} = <input type="number" data-var="${v}" value="${defaultVal}">`;
+                    container.appendChild(div);
+                    defaultVal = Math.max(1, defaultVal - 3);
+                });
+            }
+            document.getElementById('varPanel').style.display = 'flex';
+        }
+
+        function renderInputTokens(tokens) {
+            const row = document.getElementById('inputTokensRow');
+            row.innerHTML = '';
+            tokens.forEach((t, idx) => {
+                const div = document.createElement('div');
+                div.className = `token-item ${getTokenClass(t)}`;
+                div.innerText = t;
+                div.id = `input-token-${idx}`;
+                row.appendChild(div);
+            });
+        }
+
+        document.getElementById('runCalcBtn').addEventListener('click', async () => {
+            isEvalMode = true;
+            const varValues = {};
+            document.querySelectorAll('#varInputsContainer input').forEach(input => {
+                varValues[input.dataset.var] = parseFloat(input.value) || 0;
+            });
+
+            const res = await fetch('/evaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rpn_tokens: lastRPNTokens, var_values: varValues })
+            });
+            const data = await res.json();
+            steps = data.steps;
+            currentStepIndex = 0;
+
+            originalTokens = listToEvalTokens(lastRPNTokens, varValues);
+            renderInputTokens(originalTokens);
+
+            const rpnString = lastRPNTokens.join(' ');
+            document.getElementById('bannerRpnText').innerText = rpnString;
+            document.getElementById('activeRpnBanner').style.display = 'block';
+            document.getElementById('outputTitle').style.display = 'none';
+            document.getElementById('outputQueue').style.display = 'none';
+
+            enableControls();
+            renderStep(currentStepIndex, false);
+        });
+
+        function listToEvalTokens(tokens, varValues) {
+            return tokens.map(t => {
+                if (varValues[t] !== undefined) return String(varValues[t]);
+                return t;
+            });
+        }
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            if (currentStepIndex < steps.length - 1) {
+                currentStepIndex++;
+                renderStep(currentStepIndex, true);
+            }
+        });
+
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            if (currentStepIndex > 0) {
+                currentStepIndex--;
+                renderStep(currentStepIndex, false);
+            }
+        });
+
+        document.getElementById('autoBtn').addEventListener('click', () => {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+                document.getElementById('autoBtn').innerText = "自動再生";
+            } else {
+                document.getElementById('autoBtn').innerText = "停止";
+                autoTimer = setInterval(() => {
+                    if (currentStepIndex < steps.length - 1) {
+                        currentStepIndex++;
+                        renderStep(currentStepIndex, true);
+                    } else {
+                        clearInterval(autoTimer);
+                        autoTimer = null;
+                        document.getElementById('autoBtn').innerText = "自動再生";
+                    }
+                }, 1200);
+            }
+        });
+
+        function enableControls() {
+            document.getElementById('prevBtn').disabled = false;
+            document.getElementById('nextBtn').disabled = false;
+            document.getElementById('autoBtn').disabled = false;
+        }
+
+        function getTokenClass(val) {
+            if (!isNaN(val)) return 'number';
+            if (/^[A-Za-z0-9]+$/.test(val)) return 'operand';
+            if (val === '(' || val === ')') return 'parenthesis';
+            return 'operator';
+        }
+
+        function animateFly(fromElem, toElem, text, tokenClass, callback) {
+            if (!fromElem || !toElem) {
+                if (callback) callback();
+                return;
+            }
+
+            const fromRect = fromElem.getBoundingClientRect();
+            const toRect = toElem.getBoundingClientRect();
+
+            const clone = document.createElement('div');
+            clone.className = `token-item ${tokenClass} flying-token`;
+            clone.innerText = text;
+            clone.style.left = `${fromRect.left}px`;
+            clone.style.top = `${fromRect.top}px`;
+            clone.style.width = `${fromRect.width || 72}px`;
+            clone.style.height = `${fromRect.height || 28}px`;
+            document.body.appendChild(clone);
+
+            clone.getBoundingClientRect();
+
+            clone.style.left = `${toRect.left}px`;
+            clone.style.top = `${toRect.top}px`;
+
+            setTimeout(() => {
+                clone.remove();
+                if (callback) callback();
+            }, 400);
+        }
+
+        function renderStep(index, animate = false) {
+            const step = steps[index];
+            document.getElementById('statusDesc').innerText = `Step ${index + 1}/${steps.length}: ${step.desc}`;
+
+            const tube = document.getElementById('stackTube');
+            const outputQueue = document.getElementById('outputQueue');
+            const stageContainer = document.getElementById('calcStageContainer');
+            const stageRow = document.getElementById('calcStageRow');
+
+            const targetTokenIndex = getActiveTokenIndex(index);
+            originalTokens.forEach((_, idx) => {
+                const elem = document.getElementById(`input-token-${idx}`);
+                if (elem) {
+                    if (idx === targetTokenIndex) {
+                        elem.className = `token-item ${getTokenClass(originalTokens[idx])} active-target`;
+                    } else if (idx < targetTokenIndex) {
+                        elem.className = `token-item ${getTokenClass(originalTokens[idx])} processed`;
+                    } else {
+                        elem.className = `token-item ${getTokenClass(originalTokens[idx])}`;
+                    }
+                }
+            });
+
+            let fromElem = null;
+            let toElem = null;
+            let flyText = step.token || '';
+            let tokenClass = getTokenClass(flyText);
+
+            if (animate) {
+                if (step.type === 'push' || step.type === 'push_val') {
+                    fromElem = document.getElementById(`input-token-${targetTokenIndex}`);
+                    toElem = tube;
+                } else if (step.type === 'pop' || step.type === 'operand') {
+                    fromElem = tube.firstElementChild || document.getElementById(`input-token-${targetTokenIndex}`);
+                    toElem = outputQueue;
+                } else if (step.type === 'pop_b' || step.type === 'pop_a') {
+                    fromElem = tube.firstElementChild;
+                    toElem = stageContainer;
+                } else if (step.type === 'push_res') {
+                    fromElem = stageContainer;
+                    toElem = tube;
+                }
+            }
+
+            const applyDOMUpdates = () => {
+                tube.innerHTML = '';
+                step.stack.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = `token-item ${getTokenClass(item)}`;
+                    div.innerText = item;
+                    tube.appendChild(div);
+                });
+
+                if (isEvalMode && step.calc_stage) {
+                    stageContainer.style.display = 'block';
+                    const cs = step.calc_stage;
+                    let html = `
+                        <div class="calc-box val">${cs.left}</div>
+                        <div class="calc-box op">${cs.op}</div>
+                        <div class="calc-box val">${cs.right}</div>
+                    `;
+                    if (cs.res !== null) {
+                        html += ` <span>=</span> <div class="calc-box res">${cs.res}</div>`;
+                    }
+                    stageRow.innerHTML = html;
+                } else if (!isEvalMode) {
+                    stageContainer.style.display = 'none';
+                }
+
+                if (!isEvalMode && step.output) {
+                    outputQueue.innerHTML = '';
+                    step.output.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = `token-item ${getTokenClass(item)}`;
+                        div.innerText = item;
+                        outputQueue.appendChild(div);
+                    });
+                }
+
+                const history = document.getElementById('stepHistory');
+                history.innerHTML = steps.slice(0, index + 1).map((s, i) =>
+                    `<div><strong>Step ${i+1}:</strong> ${s.desc}</div>`
+                ).reverse().join('');
+            };
+
+            if (animate && fromElem && toElem) {
+                animateFly(fromElem, toElem, flyText, tokenClass, applyDOMUpdates);
+            } else {
+                applyDOMUpdates();
+            }
+        }
+
+        function getActiveTokenIndex(stepIdx) {
+            let count = -1;
+            for (let i = 0; i <= stepIdx; i++) {
+                const type = steps[i].type;
+                if (['push', 'operand', 'push_val', 'pop_b', 'read'].includes(type)) {
+                    count++;
+                }
+            }
+            return Math.max(0, Math.min(count, originalTokens.length - 1));
+        }
+    </script>
+</body>
+</html>
