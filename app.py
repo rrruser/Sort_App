@@ -43,9 +43,14 @@ with col_left:
 
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
-        img_placeholder.image(
-            image, caption="アップロードされた流れ図", use_container_width=True
-        )
+
+        # 縦幅が700pxを超える場合、アスペクト比を維持して高さ700pxに縮小
+        if image.height > 700:
+            aspect_ratio = image.width / image.height
+            new_width = int(700 * aspect_ratio)
+            image = image.resize((new_width, 700))
+
+        img_placeholder.image(image, caption="アップロードされた流れ図")
     else:
         img_placeholder.info(
             "👈 左のサイドバーから流れ図画像をドラッグ＆ドロップするとここに表示されます。"
@@ -106,9 +111,7 @@ if start_button:
     arr = initial_data.copy()
     n = len(arr)
 
-    # ----------------------------------------------------
-    # 1. バブルソート (添付画像のフローチャートに基づく)
-    # ----------------------------------------------------
+    # 1. バブルソート
     if "バブルソート" in algorithm:
         max_i = n - 2 if n >= 2 else 0
 
@@ -120,7 +123,6 @@ if start_button:
                     f"【ループ2】 j = {j} (j ≦ i の間)", arr, [j, j + 1]
                 )
 
-                # 条件判定
                 if arr[j] > arr[j + 1]:
                     update_display(
                         f"【条件判定】 pointT({j}) [{arr[j]}] > pointT({j+1}) [{arr[j+1]}] ➔ **Yes (Y)**",
@@ -128,7 +130,6 @@ if start_button:
                         [j, j + 1],
                     )
 
-                    # 退避と交換
                     save = arr[j]
                     arr[j] = arr[j + 1]
                     arr[j + 1] = save
@@ -146,9 +147,7 @@ if start_button:
                         [j, j + 1],
                     )
 
-    # ----------------------------------------------------
-    # 2. 選択ソート (Selection Sort)
-    # ----------------------------------------------------
+    # 2. 選択ソート
     elif "選択ソート" in algorithm:
         for i in range(0, n - 1):
             min_idx = i
@@ -186,9 +185,7 @@ if start_button:
                     f"【確認】 pointT({i}) が既に最小値のため交換なし", arr, [i]
                 )
 
-    # ----------------------------------------------------
-    # 3. 挿入ソート (Insertion Sort)
-    # ----------------------------------------------------
+    # 3. 挿入ソート
     elif "挿入ソート" in algorithm:
         for i in range(1, n):
             key = arr[i]
