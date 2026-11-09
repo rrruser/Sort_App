@@ -79,7 +79,7 @@ uploaded_file = st.sidebar.file_uploader(
 start_button = st.sidebar.button("ソート実行", type="primary")
 
 # 3カラムレイアウト（左：流れ図、中央：変数トレース、右：グラフ）
-col_left, col_mid, col_right = st.columns([1.0, 0.6, 1.1])
+col_left, col_mid, col_right = st.columns([1.0, 0.6, 1.2])
 
 # ----------------------------------------------------
 # 1. 左カラム: 実行状態テキスト(上) ＋ 流れ図画像(下)
@@ -122,17 +122,14 @@ with col_right:
 
 
 def draw_arrow_on_image(image, y_ratio):
-    """
-    画像の右側に40pxの余白を追加し、元画像から30px程度右寄りに赤矢印（⇦）を描画する関数
-    """
+    """流れ図画像上の各ノード位置に赤矢印（⇦）を描画"""
     if image is None:
         return None
 
     w, h = image.size
-    extra_margin = 40  # 矢印表示用スペース
+    extra_margin = 40
     new_w = w + extra_margin
 
-    # キャンバスを右側に少し広げる
     img_extended = Image.new("RGB", (new_w, h), (255, 255, 255))
     img_extended.paste(image, (0, 0))
 
@@ -141,12 +138,10 @@ def draw_arrow_on_image(image, y_ratio):
     arrow_color = (235, 40, 40)
     line_width = max(3, int(w * 0.015))
 
-    # 従来の比率位置より30px右側にシフト
     shift_px = 30
     x_end = int(w * 0.72) + shift_px
     x_start = min(new_w - 5, int(w * 0.95) + shift_px)
 
-    # 線と頭を描画
     draw.line([(x_start, y), (x_end, y)], fill=arrow_color, width=line_width)
     head_size = max(8, int(h * 0.025))
     draw.polygon(
@@ -162,7 +157,7 @@ def draw_arrow_on_image(image, y_ratio):
 
 
 def draw_trace_table(i_val="-", j_val="-", save_val="-", arr=None, j_idx=None):
-    """変数トレース用のテーブルHTMLを作成"""
+    """変数トレースのHTML作成"""
     val_j = "-"
     val_j1 = "-"
 
@@ -201,17 +196,30 @@ def draw_trace_table(i_val="-", j_val="-", save_val="-", arr=None, j_idx=None):
     return html
 
 
-def draw_chart(arr, active_indices=None, swapped=False):
-    """棒グラフ描画"""
-    colors = ["#1f77b4"] * len(arr)
+def draw_chart(
+    arr,
+    active_indices=None,
+    swapped=False,
+    save_val="-",
+    swap_stage=None,
+    j_idx=None,
+):
+    """
+    配列の状態 + save退避エリア + 移動曲線矢印を描画する拡張グラフ関数
+    """
+    n = len(arr)
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
+
+    # 配列要素の棒カラー
+    colors = ["#1f77b4"] * n
     if active_indices:
         for idx in active_indices:
-            if 0 <= idx < len(arr):
+            if 0 <= idx < n:
                 colors[idx] = "#ff7f0e" if not swapped else "#2ca02c"
 
-    fig, ax = plt.subplots(figsize=(5.5, 3.8))
-    bars = ax.bar(range(len(arr)), arr, color=colors)
+    bars = ax.bar(range(n), arr, color=colors, width=0.55)
 
+    # 各棒の上の数値表示
     for bar in bars:
         height = bar.get_height()
         ax.annotate(
@@ -222,11 +230,103 @@ def draw_chart(arr, active_indices=None, swapped=False):
             ha="center",
             va="bottom",
             fontsize=9,
+            fontweight="bold",
         )
 
-    ax.set_ylim(0, max(arr) * 1.2 if len(arr) > 0 else 10)
-    ax.set_xticks(range(len(arr)))
-    ax.set_xticklabels([f"pointT({i})" for i in range(len(arr))], fontsize=9)
+    # ----------------------------------------------------
+    # 右端に save 変数エリアを枠付きで描画
+    # ----------------------------------------------------
+    save_x = n + 0.4
+    max_height = max(arr) * 1.2 if len(arr) > 0 else 10
+
+    # 破線枠（受け皿）を描画
+    ax.bar(
+        [save_x],
+        [max_height],
+        color="none",
+        edgecolor="#888888",
+        linestyle="--",
+        linewidth=1.2,
+        width=0.55,
+    )
+
+    save_num = None
+    if isinstance(save_val, (int, float)):
+        save_num = save_val
+
+    # saveの中に値が存在するとき棒を表示
+    if save_num is not None:
+        save_color = "#dc3545" if swap_stage == "to_save" else "#198754"
+        ax.bar([save_x], [save_num], color=save_color, width=0.55, alpha=0.85)
+        ax.annotate(
+            f"{save_num}",
+            xy=(save_x, save_num),
+            xytext=(0, 2),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+            color=save_color,
+        )
+
+    # ----------------------------------------------------
+    # 移動曲線の矢印アニメーション演出
+    # ----------------------------------------------------
+    if swap_stage and j_idx is not None and 0 <= j_idx < n:
+        if swap_stage == "to_save" and save_num is not None:
+            # pointT(j) -> save へ赤い曲線矢印
+            ax.annotate(
+                "",
+                xy=(save_x, save_num * 0.8),
+                xytext=(j_idx, arr[j_idx] * 0.8),
+                arrowprops=dict(
+                    arrowstyle="->,head_width=0.4,head_length=0.6",
+                    color="#dc3545",
+                    lw=2.5,
+                    connectionstyle="arc3,rad=-0.35",
+                ),
+            )
+        elif swap_stage == "shift":
+            # pointT(j+1) -> pointT(j) へオレンジの曲線矢印
+            if j_idx + 1 < n:
+                ax.annotate(
+                    "",
+                    xy=(j_idx, arr[j_idx] * 0.8),
+                    xytext=(j_idx + 1, arr[j_idx + 1] * 0.8),
+                    arrowprops=dict(
+                        arrowstyle="->,head_width=0.4,head_length=0.6",
+                        color="#fd7e14",
+                        lw=2.5,
+                        connectionstyle="arc3,rad=-0.45",
+                    ),
+                )
+        elif swap_stage == "from_save" and save_num is not None:
+            # save -> pointT(j+1) へ緑の曲線矢印
+            if j_idx + 1 < n:
+                ax.annotate(
+                    "",
+                    xy=(j_idx + 1, arr[j_idx + 1] * 0.8),
+                    xytext=(save_x, save_num * 0.8),
+                    arrowprops=dict(
+                        arrowstyle="->,head_width=0.4,head_length=0.6",
+                        color="#198754",
+                        lw=2.5,
+                        connectionstyle="arc3,rad=-0.35",
+                    ),
+                )
+
+    ax.set_ylim(0, max_height * 1.1)
+    x_ticks = list(range(n)) + [save_x]
+    x_labels = [f"pointT({i})" for i in range(n)] + ["save"]
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_labels, fontsize=8.5)
+
+    # save ラベルを強調
+    labels = ax.get_xticklabels()
+    labels[-1].set_color("#dc3545")
+    labels[-1].set_weight("bold")
+
     plt.tight_layout()
     return fig
 
@@ -241,36 +341,41 @@ def update_display(
     j_val="-",
     save_val="-",
     j_idx=None,
+    swap_stage=None,
 ):
-    """状態テキスト・矢印画像・トレース表・グラフを一括更新"""
+    """全要素の一括更新"""
     status_placeholder.markdown(f"> **{node_text}**")
 
-    # トレース表更新
     trace_placeholder.markdown(
         draw_trace_table(i_val, j_val, save_val, arr, j_idx),
         unsafe_allow_html=True,
     )
 
-    # 矢印付き画像更新
     if base_image is not None:
         arrow_img = draw_arrow_on_image(base_image, y_ratio)
         img_placeholder.image(arrow_img)
 
-    # グラフ更新
     chart_placeholder.pyplot(
-        draw_chart(arr, active_indices=active_indices, swapped=swapped)
+        draw_chart(
+            arr,
+            active_indices=active_indices,
+            swapped=swapped,
+            save_val=save_val,
+            swap_stage=swap_stage,
+            j_idx=j_idx,
+        )
     )
 
     time.sleep(speed)
 
 
-# 初期画面の描画
+# 初期画面
 trace_placeholder.markdown(
     draw_trace_table(arr=initial_data), unsafe_allow_html=True
 )
 chart_placeholder.pyplot(draw_chart(initial_data))
 
-# ソート処理の実行
+# ソート実行
 if start_button:
     arr = initial_data.copy()
     n = len(arr)
@@ -320,6 +425,7 @@ if start_button:
                         j_idx=j,
                     )
 
+                    # 1. pointT(j) -> save へ移動
                     save = arr[j]
                     update_display(
                         f"【退避】 pointT({j}) [{save}] ➔ save",
@@ -330,8 +436,10 @@ if start_button:
                         j_val=j,
                         save_val=save,
                         j_idx=j,
+                        swap_stage="to_save",
                     )
 
+                    # 2. pointT(j+1) -> pointT(j) へ代入
                     arr[j] = arr[j + 1]
                     update_display(
                         f"【代入】 pointT({j+1}) [{arr[j+1]}] ➔ pointT({j})",
@@ -342,8 +450,10 @@ if start_button:
                         j_val=j,
                         save_val=save,
                         j_idx=j,
+                        swap_stage="shift",
                     )
 
+                    # 3. save -> pointT(j+1) へ戻し
                     arr[j + 1] = save
                     update_display(
                         f"【戻し】 save [{save}] ➔ pointT({j+1}) (交換完了)",
@@ -355,6 +465,7 @@ if start_button:
                         j_val=j,
                         save_val=save,
                         j_idx=j,
+                        swap_stage="from_save",
                     )
                 else:
                     update_display(
@@ -408,6 +519,17 @@ if start_button:
 
             if min_idx != i:
                 save = arr[i]
+                update_display(
+                    f"【退避】 pointT({i}) [{save}] ➔ save",
+                    arr,
+                    [i, min_idx],
+                    y_ratio=0.65,
+                    i_val=i,
+                    j_val="-",
+                    save_val=save,
+                    j_idx=i,
+                    swap_stage="to_save",
+                )
                 arr[i] = arr[min_idx]
                 arr[min_idx] = save
                 update_display(
@@ -419,6 +541,8 @@ if start_button:
                     i_val=i,
                     j_val="-",
                     save_val=save,
+                    j_idx=min_idx,
+                    swap_stage="from_save",
                 )
 
     elif "挿入ソート" in algorithm:
@@ -427,14 +551,15 @@ if start_button:
             save = key
             j = i - 1
             update_display(
-                f"【外側ループ】 i = {i} (挿入値 save = {key})",
+                f"【退避】 pointT({i}) [{save}] ➔ save",
                 arr,
                 [i],
                 y_ratio=0.15,
                 i_val=i,
                 j_val=j,
                 save_val=save,
-                j_idx=j,
+                j_idx=i,
+                swap_stage="to_save",
             )
 
             while j >= 0 and arr[j] > key:
@@ -447,13 +572,14 @@ if start_button:
                     j_val=j,
                     save_val=save,
                     j_idx=j,
+                    swap_stage="shift",
                 )
                 arr[j + 1] = arr[j]
                 j -= 1
 
             arr[j + 1] = key
             update_display(
-                f"【挿入】 pointT({j+1}) に {key} を挿入",
+                f"【挿入】 save [{key}] ➔ pointT({j+1})",
                 arr,
                 [j + 1],
                 swapped=True,
@@ -462,11 +588,12 @@ if start_button:
                 j_val=j + 1,
                 save_val=save,
                 j_idx=j + 1,
+                swap_stage="from_save",
             )
 
     status_placeholder.success("🎉 ソート処理が完了しました！")
     trace_placeholder.markdown(
-        draw_trace_table(i_val="完了", j_val="完了", save_val=save, arr=arr),
+        draw_trace_table(i_val="完了", j_val="完了", save_val="-", arr=arr),
         unsafe_allow_html=True,
     )
     chart_placeholder.pyplot(draw_chart(arr))
