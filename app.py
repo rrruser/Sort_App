@@ -8,7 +8,7 @@ st.set_page_config(
     page_title="ソートアルゴリズム＆流れ図ビジュアルアナライザー", layout="wide"
 )
 
-# カスタムCSS: 上部余白の削減 ＆ 文字サイズを最大1.5rem以下に制限
+# カスタムCSS: 上部余白の削減 ＆ 文字サイズを最大1.5rem以下に制限 ＆ アラート装飾
 st.markdown(
     """
     <style>
@@ -44,6 +44,31 @@ st.markdown(
     .stImage, .stPlotlyChart {
         margin-bottom: 0rem !important;
     }
+    /* アラートポップアップ風カード */
+    .popup-alert-swap {
+        background-color: #ffebe9;
+        border: 2px solid #ff4d4f;
+        color: #d9363e;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-size: 1.05rem;
+        text-align: center;
+        margin-bottom: 8px;
+        box-shadow: 0 4px 6px rgba(255, 77, 79, 0.15);
+    }
+    .popup-alert-noswap {
+        background-color: #e6f4ea;
+        border: 2px solid #34a853;
+        color: #1e7e34;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-size: 1.05rem;
+        text-align: center;
+        margin-bottom: 8px;
+        box-shadow: 0 4px 6px rgba(52, 168, 83, 0.15);
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -59,7 +84,7 @@ algorithm = st.sidebar.selectbox(
     ["バブルソート (Bubble Sort)", "選択ソート (Selection Sort)", "挿入ソート (Insertion Sort)"],
 )
 
-speed = st.sidebar.slider("アニメーション速度 (秒)", 0.1, 2.0, 0.5)
+speed = st.sidebar.slider("通常アニメーション速度 (秒)", 0.1, 2.0, 0.6)
 
 input_str = st.sidebar.text_input(
     "初期配列（カンマ区切り）", value="64, 34, 25, 12, 22"
@@ -117,10 +142,11 @@ with col_mid:
     trace_placeholder = st.empty()
 
 # ----------------------------------------------------
-# 3. 右カラム: ソートアニメーション棒グラフ
+# 3. 右カラム: ポップアップ ＋ ソートアニメーション棒グラフ
 # ----------------------------------------------------
 with col_right:
     st.markdown("### 📊 ソートアニメーション")
+    popup_placeholder = st.empty()  # アニメーション上のポップアップ表示用
     chart_placeholder = st.empty()
 
 
@@ -208,13 +234,10 @@ def draw_chart(
     j_idx=None,
     y_max=FIXED_Y_MAX,
 ):
-    """
-    配列の状態 + save退避エリア + 移動曲線矢印を描画するグラフ関数 (y軸最大値固定)
-    """
+    """棒グラフ描画"""
     n = len(arr)
     fig, ax = plt.subplots(figsize=(5.8, 3.8))
 
-    # 配列要素の棒カラー
     colors = ["#1f77b4"] * n
     if active_indices:
         for idx in active_indices:
@@ -223,7 +246,6 @@ def draw_chart(
 
     bars = ax.bar(range(n), arr, color=colors, width=0.55)
 
-    # 各棒の上の数値表示
     for bar in bars:
         height = bar.get_height()
         ax.annotate(
@@ -237,12 +259,7 @@ def draw_chart(
             fontweight="bold",
         )
 
-    # ----------------------------------------------------
-    # 右端に save 変数エリアを枠付きで描画
-    # ----------------------------------------------------
     save_x = n + 0.4
-
-    # 固定y軸高さの85%の位置を破線枠の高さとして使用
     box_height = y_max * 0.85
 
     ax.bar(
@@ -259,7 +276,6 @@ def draw_chart(
     if isinstance(save_val, (int, float)):
         save_num = save_val
 
-    # saveの中に値が存在するとき棒を表示
     if save_num is not None:
         save_color = "#dc3545" if swap_stage == "to_save" else "#198754"
         ax.bar([save_x], [save_num], color=save_color, width=0.55, alpha=0.85)
@@ -275,12 +291,9 @@ def draw_chart(
             color=save_color,
         )
 
-    # ----------------------------------------------------
-    # 移動曲線の矢印アニメーション演出
-    # ----------------------------------------------------
+    # 曲線矢印
     if swap_stage and j_idx is not None and 0 <= j_idx < n:
         if swap_stage == "to_save" and save_num is not None:
-            # pointT(j) -> save へ赤い曲線矢印
             ax.annotate(
                 "",
                 xy=(save_x, save_num * 0.8),
@@ -293,7 +306,6 @@ def draw_chart(
                 ),
             )
         elif swap_stage == "shift":
-            # pointT(j+1) -> pointT(j) へオレンジの曲線矢印
             if j_idx + 1 < n:
                 ax.annotate(
                     "",
@@ -307,7 +319,6 @@ def draw_chart(
                     ),
                 )
         elif swap_stage == "from_save" and save_num is not None:
-            # save -> pointT(j+1) へ緑の曲線矢印
             if j_idx + 1 < n:
                 ax.annotate(
                     "",
@@ -321,15 +332,12 @@ def draw_chart(
                     ),
                 )
 
-    # y軸最大値を固定値で設定
     ax.set_ylim(0, y_max)
-
     x_ticks = list(range(n)) + [save_x]
     x_labels = [f"pointT({i})" for i in range(n)] + ["save"]
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels, fontsize=8.5)
 
-    # save ラベルを強調
     labels = ax.get_xticklabels()
     labels[-1].set_color("#dc3545")
     labels[-1].set_weight("bold")
@@ -350,9 +358,25 @@ def update_display(
     j_idx=None,
     swap_stage=None,
     y_max=FIXED_Y_MAX,
+    popup_state=None,  # 'swap' (交換する) または 'no_swap' (交換しない) または None
+    speed_factor=1.0,  # 通常1.0、交換時 1/3（3倍速）
 ):
-    """全要素の一括更新"""
+    """全要素の一括更新（速度制御 & ポップアップ追加）"""
     status_placeholder.markdown(f"> **{node_text}**")
+
+    # ポップアップアラートの更新
+    if popup_state == "swap":
+        popup_placeholder.markdown(
+            '<div class="popup-alert-swap">🚨 【判定結果】 交換する (YES)</div>',
+            unsafe_allow_html=True,
+        )
+    elif popup_state == "no_swap":
+        popup_placeholder.markdown(
+            '<div class="popup-alert-noswap">✅ 【判定結果】 交換しない (NO)</div>',
+            unsafe_allow_html=True,
+        )
+    elif popup_state == "clear":
+        popup_placeholder.empty()
 
     trace_placeholder.markdown(
         draw_trace_table(i_val, j_val, save_val, arr, j_idx),
@@ -375,7 +399,8 @@ def update_display(
         )
     )
 
-    time.sleep(speed)
+    # 3倍速制御 (speed_factor = 1/3)
+    time.sleep(speed * speed_factor)
 
 
 # 初期画面
@@ -390,7 +415,6 @@ if start_button:
     n = len(arr)
     save = "-"
 
-    # 現在の配列における固定y軸最大値を再計算
     y_max = max(arr) * 1.25 if len(arr) > 0 else 100
 
     if "バブルソート" in algorithm:
@@ -412,6 +436,7 @@ if start_button:
                 j_val="-",
                 save_val=save,
                 y_max=y_max,
+                popup_state="clear",
             )
 
             for j in range(0, i + 1):
@@ -425,11 +450,14 @@ if start_button:
                     save_val=save,
                     j_idx=j,
                     y_max=y_max,
+                    popup_state="clear",
                 )
 
+                # 条件判定
                 if arr[j] > arr[j + 1]:
+                    # アラート「交換する (YES)」を表示
                     update_display(
-                        f"【比較】 pointT({j})[{arr[j]}] > pointT({j+1})[{arr[j+1]}] ➔ **Yes**",
+                        f"【比較】 pointT({j})[{arr[j]}] > pointT({j+1})[{arr[j+1]}] ➔ **Yes (交換する)**",
                         arr,
                         [j, j + 1],
                         y_ratio=Y_COND,
@@ -438,9 +466,12 @@ if start_button:
                         save_val=save,
                         j_idx=j,
                         y_max=y_max,
+                        popup_state="swap",
+                        speed_factor=1.0,
                     )
 
-                    # 1. pointT(j) -> save へ移動
+                    # --- 交換処理（3倍速: speed_factor = 1/3） ---
+                    # 1. pointT(j) -> save へ退避 (3倍速)
                     save = arr[j]
                     update_display(
                         f"【退避】 pointT({j}) [{save}] ➔ save",
@@ -453,9 +484,11 @@ if start_button:
                         j_idx=j,
                         swap_stage="to_save",
                         y_max=y_max,
+                        popup_state="swap",
+                        speed_factor=1 / 3.0,  # ⚡ 3倍速
                     )
 
-                    # 2. pointT(j+1) -> pointT(j) へ代入
+                    # 2. pointT(j+1) -> pointT(j) へ代入 (3倍速)
                     arr[j] = arr[j + 1]
                     update_display(
                         f"【代入】 pointT({j+1}) [{arr[j+1]}] ➔ pointT({j})",
@@ -468,9 +501,11 @@ if start_button:
                         j_idx=j,
                         swap_stage="shift",
                         y_max=y_max,
+                        popup_state="swap",
+                        speed_factor=1 / 3.0,  # ⚡ 3倍速
                     )
 
-                    # 3. save -> pointT(j+1) へ戻し
+                    # 3. save -> pointT(j+1) へ戻し (3倍速)
                     arr[j + 1] = save
                     update_display(
                         f"【戻し】 save [{save}] ➔ pointT({j+1}) (交換完了)",
@@ -484,10 +519,13 @@ if start_button:
                         j_idx=j,
                         swap_stage="from_save",
                         y_max=y_max,
+                        popup_state="swap",
+                        speed_factor=1 / 3.0,  # ⚡ 3倍速
                     )
                 else:
+                    # アラート「交換しない (NO)」を表示
                     update_display(
-                        f"【比較】 pointT({j})[{arr[j]}] > pointT({j+1})[{arr[j+1]}] ➔ **No**",
+                        f"【比較】 pointT({j})[{arr[j]}] > pointT({j+1})[{arr[j+1]}] ➔ **No (交換しない)**",
                         arr,
                         [j, j + 1],
                         y_ratio=Y_COND,
@@ -496,6 +534,8 @@ if start_button:
                         save_val=save,
                         j_idx=j,
                         y_max=y_max,
+                        popup_state="no_swap",
+                        speed_factor=1.0,
                     )
 
     elif "選択ソート" in algorithm:
@@ -510,9 +550,11 @@ if start_button:
                 j_val="-",
                 save_val=save,
                 y_max=y_max,
+                popup_state="clear",
             )
 
             for j in range(i + 1, n):
+                is_smaller = arr[j] < arr[min_idx]
                 update_display(
                     f"【比較】 pointT({j}) と 最小値 pointT({min_idx})",
                     arr,
@@ -523,9 +565,10 @@ if start_button:
                     save_val=save,
                     j_idx=j,
                     y_max=y_max,
+                    popup_state="swap" if is_smaller else "no_swap",
                 )
 
-                if arr[j] < arr[min_idx]:
+                if is_smaller:
                     min_idx = j
                     update_display(
                         f"【更新】 min_idx = {min_idx} (値: {arr[min_idx]})",
@@ -552,6 +595,8 @@ if start_button:
                     j_idx=i,
                     swap_stage="to_save",
                     y_max=y_max,
+                    popup_state="swap",
+                    speed_factor=1 / 3.0,  # ⚡ 3倍速
                 )
                 arr[i] = arr[min_idx]
                 arr[min_idx] = save
@@ -567,6 +612,8 @@ if start_button:
                     j_idx=min_idx,
                     swap_stage="from_save",
                     y_max=y_max,
+                    popup_state="swap",
+                    speed_factor=1 / 3.0,  # ⚡ 3倍速
                 )
 
     elif "挿入ソート" in algorithm:
@@ -585,11 +632,12 @@ if start_button:
                 j_idx=i,
                 swap_stage="to_save",
                 y_max=y_max,
+                speed_factor=1 / 3.0,  # ⚡ 3倍速
             )
 
             while j >= 0 and arr[j] > key:
                 update_display(
-                    f"【比較＆シフト】 pointT({j})[{arr[j]}] > {key}",
+                    f"【比較＆シフト】 pointT({j})[{arr[j]}] > {key} (シフト実行)",
                     arr,
                     [j, j + 1],
                     y_ratio=0.40,
@@ -599,6 +647,8 @@ if start_button:
                     j_idx=j,
                     swap_stage="shift",
                     y_max=y_max,
+                    popup_state="swap",
+                    speed_factor=1 / 3.0,  # ⚡ 3倍速
                 )
                 arr[j + 1] = arr[j]
                 j -= 1
@@ -616,8 +666,10 @@ if start_button:
                 j_idx=j + 1,
                 swap_stage="from_save",
                 y_max=y_max,
+                speed_factor=1 / 3.0,  # ⚡ 3倍速
             )
 
+    popup_placeholder.empty()
     status_placeholder.success("🎉 ソート処理が完了しました！")
     trace_placeholder.markdown(
         draw_trace_table(i_val="完了", j_val="完了", save_val="-", arr=arr),
