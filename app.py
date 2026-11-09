@@ -8,21 +8,16 @@ st.set_page_config(
     page_title="ソートアルゴリズム＆流れ図ビジュアルアナライザー", layout="wide"
 )
 
-# ----------------------------------------------------
 # カスタムCSS: 上部余白の削減 ＆ 文字サイズを最大1.5rem以下に制限
-# ----------------------------------------------------
 st.markdown(
     """
     <style>
-    /* 上部・周囲の余白を最小化 */
     .block-container {
         padding-top: 0.8rem !important;
         padding-bottom: 0.5rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
     }
-
-    /* タイトル・見出しのフォントサイズ制限 (最大1.5rem以下) と余白削減 */
     h1 {
         font-size: 1.4rem !important;
         margin-top: 0rem !important;
@@ -42,14 +37,10 @@ st.markdown(
     p, label, span {
         font-size: 0.9rem !important;
     }
-
-    /* 引用・ステータス表示エリアのコンパクト化 */
     blockquote {
         margin: 0.2rem 0 !important;
         padding: 0.3rem 0.6rem !important;
     }
-
-    /* Matplotlib等の画像表示上下の余白を排除 */
     .stImage, .stPlotlyChart {
         margin-bottom: 0rem !important;
     }
@@ -87,18 +78,17 @@ uploaded_file = st.sidebar.file_uploader(
 
 start_button = st.sidebar.button("ソート実行", type="primary")
 
-# 左右2カラムレイアウト
-col_left, col_right = st.columns([1, 1])
+# 3カラムレイアウト（左：流れ図、中央：変数トレース、右：グラフ）
+col_left, col_mid, col_right = st.columns([1.0, 0.6, 1.1])
 
 # ----------------------------------------------------
-# 左カラム: 実行状態テキスト(上) ＋ 流れ図画像(下)
+# 1. 左カラム: 実行状態テキスト(上) ＋ 流れ図画像(下)
 # ----------------------------------------------------
 with col_left:
     st.markdown("### 📌 実行状態と流れ図")
-    status_placeholder = st.empty()  # 上側のテキスト枠
-    img_placeholder = st.empty()     # 下側の画像枠
+    status_placeholder = st.empty()
+    img_placeholder = st.empty()
 
-    # ブラウザ縦幅700px内に収めるため、画像最大高さを 480px に設定
     MAX_IMG_HEIGHT = 480
     base_image = None
 
@@ -117,7 +107,14 @@ with col_left:
         )
 
 # ----------------------------------------------------
-# 右カラム: ソートアニメーション棒グラフ
+# 2. 中央カラム: 変数トレース表示
+# ----------------------------------------------------
+with col_mid:
+    st.markdown("### 🔍 変数トレース")
+    trace_placeholder = st.empty()
+
+# ----------------------------------------------------
+# 3. 右カラム: ソートアニメーション棒グラフ
 # ----------------------------------------------------
 with col_right:
     st.markdown("### 📊 ソートアニメーション")
@@ -125,23 +122,32 @@ with col_right:
 
 
 def draw_arrow_on_image(image, y_ratio):
-    """画像上の指定高さ比率(0.0〜1.0)の位置に赤色矢印（⇦）を描画"""
+    """
+    画像の右側に40pxの余白を追加し、元画像から30px程度右寄りに赤矢印（⇦）を描画する関数
+    """
     if image is None:
         return None
 
-    img_copy = image.copy()
-    draw = ImageDraw.Draw(img_copy)
-    w, h = img_copy.size
+    w, h = image.size
+    extra_margin = 40  # 矢印表示用スペース
+    new_w = w + extra_margin
 
+    # キャンバスを右側に少し広げる
+    img_extended = Image.new("RGB", (new_w, h), (255, 255, 255))
+    img_extended.paste(image, (0, 0))
+
+    draw = ImageDraw.Draw(img_extended)
     y = int(h * y_ratio)
     arrow_color = (235, 40, 40)
     line_width = max(3, int(w * 0.015))
 
-    x_end = int(w * 0.72)
-    x_start = int(w * 0.95)
+    # 従来の比率位置より30px右側にシフト
+    shift_px = 30
+    x_end = int(w * 0.72) + shift_px
+    x_start = min(new_w - 5, int(w * 0.95) + shift_px)
 
+    # 線と頭を描画
     draw.line([(x_start, y), (x_end, y)], fill=arrow_color, width=line_width)
-
     head_size = max(8, int(h * 0.025))
     draw.polygon(
         [
@@ -152,18 +158,57 @@ def draw_arrow_on_image(image, y_ratio):
         fill=arrow_color,
     )
 
-    return img_copy
+    return img_extended
+
+
+def draw_trace_table(i_val="-", j_val="-", save_val="-", arr=None, j_idx=None):
+    """変数トレース用のテーブルHTMLを作成"""
+    val_j = "-"
+    val_j1 = "-"
+
+    if arr is not None and j_idx is not None:
+        if 0 <= j_idx < len(arr):
+            val_j = str(arr[j_idx])
+        if 0 <= j_idx + 1 < len(arr):
+            val_j1 = str(arr[j_idx + 1])
+
+    html = f"""
+    <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 12px;">
+        <table style="width:100%; border-collapse: collapse; font-size: 0.92rem;">
+            <tr style="border-bottom: 1px solid #e9ecef;">
+                <td style="padding: 8px 4px; font-weight: bold; color: #495057;">ループ変数 <code style="color: #0d6efd;">i</code></td>
+                <td style="padding: 8px 4px; text-align: right; font-weight: bold; font-size: 1.1rem; color: #0d6efd;">{i_val}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+                <td style="padding: 8px 4px; font-weight: bold; color: #495057;">ループ変数 <code style="color: #0d6efd;">j</code></td>
+                <td style="padding: 8px 4px; text-align: right; font-weight: bold; font-size: 1.1rem; color: #0d6efd;">{j_val}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+                <td style="padding: 8px 4px; font-weight: bold; color: #495057;">退避変数 <code style="color: #dc3545;">save</code></td>
+                <td style="padding: 8px 4px; text-align: right; font-weight: bold; font-size: 1.1rem; color: #dc3545;">{save_val}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+                <td style="padding: 8px 4px; color: #495057;">要素 <code>pointT(j)</code></td>
+                <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: #198754;">{val_j}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 4px; color: #495057;">要素 <code>pointT(j+1)</code></td>
+                <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: #198754;">{val_j1}</td>
+            </tr>
+        </table>
+    </div>
+    """
+    return html
 
 
 def draw_chart(arr, active_indices=None, swapped=False):
-    """コンパクトサイズの棒グラフ描画"""
+    """棒グラフ描画"""
     colors = ["#1f77b4"] * len(arr)
     if active_indices:
         for idx in active_indices:
             if 0 <= idx < len(arr):
                 colors[idx] = "#ff7f0e" if not swapped else "#2ca02c"
 
-    # 全体サイズをコンパクト化 (figsize 縦幅を調整)
     fig, ax = plt.subplots(figsize=(5.5, 3.8))
     bars = ax.bar(range(len(arr)), arr, color=colors)
 
@@ -186,16 +231,32 @@ def draw_chart(arr, active_indices=None, swapped=False):
     return fig
 
 
-def update_display(node_text, arr, active_indices=None, swapped=False, y_ratio=0.1):
-    """状態テキスト・矢印付き画像・グラフの一括更新"""
-    status_placeholder.markdown(
-        f"> **{node_text}**"
+def update_display(
+    node_text,
+    arr,
+    active_indices=None,
+    swapped=False,
+    y_ratio=0.1,
+    i_val="-",
+    j_val="-",
+    save_val="-",
+    j_idx=None,
+):
+    """状態テキスト・矢印画像・トレース表・グラフを一括更新"""
+    status_placeholder.markdown(f"> **{node_text}**")
+
+    # トレース表更新
+    trace_placeholder.markdown(
+        draw_trace_table(i_val, j_val, save_val, arr, j_idx),
+        unsafe_allow_html=True,
     )
 
+    # 矢印付き画像更新
     if base_image is not None:
         arrow_img = draw_arrow_on_image(base_image, y_ratio)
         img_placeholder.image(arrow_img)
 
+    # グラフ更新
     chart_placeholder.pyplot(
         draw_chart(arr, active_indices=active_indices, swapped=swapped)
     )
@@ -203,13 +264,17 @@ def update_display(node_text, arr, active_indices=None, swapped=False, y_ratio=0
     time.sleep(speed)
 
 
-# 初期表示
+# 初期画面の描画
+trace_placeholder.markdown(
+    draw_trace_table(arr=initial_data), unsafe_allow_html=True
+)
 chart_placeholder.pyplot(draw_chart(initial_data))
 
 # ソート処理の実行
 if start_button:
     arr = initial_data.copy()
     n = len(arr)
+    save = "-"
 
     if "バブルソート" in algorithm:
         Y_LOOP1 = 0.10
@@ -226,6 +291,9 @@ if start_button:
                 f"【ループ1】 i = {i} (i ≧ 0)",
                 arr,
                 y_ratio=Y_LOOP1,
+                i_val=i,
+                j_val="-",
+                save_val=save,
             )
 
             for j in range(0, i + 1):
@@ -234,6 +302,10 @@ if start_button:
                     arr,
                     [j, j + 1],
                     y_ratio=Y_LOOP2,
+                    i_val=i,
+                    j_val=j,
+                    save_val=save,
+                    j_idx=j,
                 )
 
                 if arr[j] > arr[j + 1]:
@@ -242,6 +314,10 @@ if start_button:
                         arr,
                         [j, j + 1],
                         y_ratio=Y_COND,
+                        i_val=i,
+                        j_val=j,
+                        save_val=save,
+                        j_idx=j,
                     )
 
                     save = arr[j]
@@ -250,6 +326,10 @@ if start_button:
                         arr,
                         [j, j + 1],
                         y_ratio=Y_SWAP1,
+                        i_val=i,
+                        j_val=j,
+                        save_val=save,
+                        j_idx=j,
                     )
 
                     arr[j] = arr[j + 1]
@@ -258,6 +338,10 @@ if start_button:
                         arr,
                         [j, j + 1],
                         y_ratio=Y_SWAP2,
+                        i_val=i,
+                        j_val=j,
+                        save_val=save,
+                        j_idx=j,
                     )
 
                     arr[j + 1] = save
@@ -267,6 +351,10 @@ if start_button:
                         [j, j + 1],
                         swapped=True,
                         y_ratio=Y_SWAP3,
+                        i_val=i,
+                        j_val=j,
+                        save_val=save,
+                        j_idx=j,
                     )
                 else:
                     update_display(
@@ -274,6 +362,10 @@ if start_button:
                         arr,
                         [j, j + 1],
                         y_ratio=Y_COND,
+                        i_val=i,
+                        j_val=j,
+                        save_val=save,
+                        j_idx=j,
                     )
 
     elif "選択ソート" in algorithm:
@@ -284,6 +376,9 @@ if start_button:
                 arr,
                 [i],
                 y_ratio=0.15,
+                i_val=i,
+                j_val="-",
+                save_val=save,
             )
 
             for j in range(i + 1, n):
@@ -292,6 +387,10 @@ if start_button:
                     arr,
                     [min_idx, j],
                     y_ratio=0.35,
+                    i_val=i,
+                    j_val=j,
+                    save_val=save,
+                    j_idx=j,
                 )
 
                 if arr[j] < arr[min_idx]:
@@ -301,6 +400,10 @@ if start_button:
                         arr,
                         [min_idx],
                         y_ratio=0.50,
+                        i_val=i,
+                        j_val=j,
+                        save_val=save,
+                        j_idx=j,
                     )
 
             if min_idx != i:
@@ -313,17 +416,25 @@ if start_button:
                     [i, min_idx],
                     swapped=True,
                     y_ratio=0.65,
+                    i_val=i,
+                    j_val="-",
+                    save_val=save,
                 )
 
     elif "挿入ソート" in algorithm:
         for i in range(1, n):
             key = arr[i]
+            save = key
             j = i - 1
             update_display(
                 f"【外側ループ】 i = {i} (挿入値 save = {key})",
                 arr,
                 [i],
                 y_ratio=0.15,
+                i_val=i,
+                j_val=j,
+                save_val=save,
+                j_idx=j,
             )
 
             while j >= 0 and arr[j] > key:
@@ -332,6 +443,10 @@ if start_button:
                     arr,
                     [j, j + 1],
                     y_ratio=0.40,
+                    i_val=i,
+                    j_val=j,
+                    save_val=save,
+                    j_idx=j,
                 )
                 arr[j + 1] = arr[j]
                 j -= 1
@@ -343,9 +458,17 @@ if start_button:
                 [j + 1],
                 swapped=True,
                 y_ratio=0.65,
+                i_val=i,
+                j_val=j + 1,
+                save_val=save,
+                j_idx=j + 1,
             )
 
     status_placeholder.success("🎉 ソート処理が完了しました！")
+    trace_placeholder.markdown(
+        draw_trace_table(i_val="完了", j_val="完了", save_val=save, arr=arr),
+        unsafe_allow_html=True,
+    )
     chart_placeholder.pyplot(draw_chart(arr))
 
     if base_image is not None:
