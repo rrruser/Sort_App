@@ -70,6 +70,9 @@ except ValueError:
     st.error("数字をカンマ区切りで入力してください。")
     initial_data = [64, 34, 25, 12, 22]
 
+# y軸の最大値を初期データに基づいて固定（余白25%）
+FIXED_Y_MAX = max(initial_data) * 1.25 if len(initial_data) > 0 else 100
+
 # 画像アップロード機能
 st.sidebar.subheader("流れ図の読み込み")
 uploaded_file = st.sidebar.file_uploader(
@@ -203,9 +206,10 @@ def draw_chart(
     save_val="-",
     swap_stage=None,
     j_idx=None,
+    y_max=FIXED_Y_MAX,
 ):
     """
-    配列の状態 + save退避エリア + 移動曲線矢印を描画する拡張グラフ関数
+    配列の状態 + save退避エリア + 移動曲線矢印を描画するグラフ関数 (y軸最大値固定)
     """
     n = len(arr)
     fig, ax = plt.subplots(figsize=(5.8, 3.8))
@@ -237,12 +241,13 @@ def draw_chart(
     # 右端に save 変数エリアを枠付きで描画
     # ----------------------------------------------------
     save_x = n + 0.4
-    max_height = max(arr) * 1.2 if len(arr) > 0 else 10
 
-    # 破線枠（受け皿）を描画
+    # 固定y軸高さの85%の位置を破線枠の高さとして使用
+    box_height = y_max * 0.85
+
     ax.bar(
         [save_x],
-        [max_height],
+        [box_height],
         color="none",
         edgecolor="#888888",
         linestyle="--",
@@ -316,7 +321,9 @@ def draw_chart(
                     ),
                 )
 
-    ax.set_ylim(0, max_height * 1.1)
+    # y軸最大値を固定値で設定
+    ax.set_ylim(0, y_max)
+
     x_ticks = list(range(n)) + [save_x]
     x_labels = [f"pointT({i})" for i in range(n)] + ["save"]
     ax.set_xticks(x_ticks)
@@ -342,6 +349,7 @@ def update_display(
     save_val="-",
     j_idx=None,
     swap_stage=None,
+    y_max=FIXED_Y_MAX,
 ):
     """全要素の一括更新"""
     status_placeholder.markdown(f"> **{node_text}**")
@@ -363,6 +371,7 @@ def update_display(
             save_val=save_val,
             swap_stage=swap_stage,
             j_idx=j_idx,
+            y_max=y_max,
         )
     )
 
@@ -373,13 +382,16 @@ def update_display(
 trace_placeholder.markdown(
     draw_trace_table(arr=initial_data), unsafe_allow_html=True
 )
-chart_placeholder.pyplot(draw_chart(initial_data))
+chart_placeholder.pyplot(draw_chart(initial_data, y_max=FIXED_Y_MAX))
 
 # ソート実行
 if start_button:
     arr = initial_data.copy()
     n = len(arr)
     save = "-"
+
+    # 現在の配列における固定y軸最大値を再計算
+    y_max = max(arr) * 1.25 if len(arr) > 0 else 100
 
     if "バブルソート" in algorithm:
         Y_LOOP1 = 0.10
@@ -399,6 +411,7 @@ if start_button:
                 i_val=i,
                 j_val="-",
                 save_val=save,
+                y_max=y_max,
             )
 
             for j in range(0, i + 1):
@@ -411,6 +424,7 @@ if start_button:
                     j_val=j,
                     save_val=save,
                     j_idx=j,
+                    y_max=y_max,
                 )
 
                 if arr[j] > arr[j + 1]:
@@ -423,6 +437,7 @@ if start_button:
                         j_val=j,
                         save_val=save,
                         j_idx=j,
+                        y_max=y_max,
                     )
 
                     # 1. pointT(j) -> save へ移動
@@ -437,6 +452,7 @@ if start_button:
                         save_val=save,
                         j_idx=j,
                         swap_stage="to_save",
+                        y_max=y_max,
                     )
 
                     # 2. pointT(j+1) -> pointT(j) へ代入
@@ -451,6 +467,7 @@ if start_button:
                         save_val=save,
                         j_idx=j,
                         swap_stage="shift",
+                        y_max=y_max,
                     )
 
                     # 3. save -> pointT(j+1) へ戻し
@@ -466,6 +483,7 @@ if start_button:
                         save_val=save,
                         j_idx=j,
                         swap_stage="from_save",
+                        y_max=y_max,
                     )
                 else:
                     update_display(
@@ -477,6 +495,7 @@ if start_button:
                         j_val=j,
                         save_val=save,
                         j_idx=j,
+                        y_max=y_max,
                     )
 
     elif "選択ソート" in algorithm:
@@ -490,6 +509,7 @@ if start_button:
                 i_val=i,
                 j_val="-",
                 save_val=save,
+                y_max=y_max,
             )
 
             for j in range(i + 1, n):
@@ -502,6 +522,7 @@ if start_button:
                     j_val=j,
                     save_val=save,
                     j_idx=j,
+                    y_max=y_max,
                 )
 
                 if arr[j] < arr[min_idx]:
@@ -515,6 +536,7 @@ if start_button:
                         j_val=j,
                         save_val=save,
                         j_idx=j,
+                        y_max=y_max,
                     )
 
             if min_idx != i:
@@ -529,6 +551,7 @@ if start_button:
                     save_val=save,
                     j_idx=i,
                     swap_stage="to_save",
+                    y_max=y_max,
                 )
                 arr[i] = arr[min_idx]
                 arr[min_idx] = save
@@ -543,6 +566,7 @@ if start_button:
                     save_val=save,
                     j_idx=min_idx,
                     swap_stage="from_save",
+                    y_max=y_max,
                 )
 
     elif "挿入ソート" in algorithm:
@@ -560,6 +584,7 @@ if start_button:
                 save_val=save,
                 j_idx=i,
                 swap_stage="to_save",
+                y_max=y_max,
             )
 
             while j >= 0 and arr[j] > key:
@@ -573,6 +598,7 @@ if start_button:
                     save_val=save,
                     j_idx=j,
                     swap_stage="shift",
+                    y_max=y_max,
                 )
                 arr[j + 1] = arr[j]
                 j -= 1
@@ -589,6 +615,7 @@ if start_button:
                 save_val=save,
                 j_idx=j + 1,
                 swap_stage="from_save",
+                y_max=y_max,
             )
 
     status_placeholder.success("🎉 ソート処理が完了しました！")
@@ -596,7 +623,7 @@ if start_button:
         draw_trace_table(i_val="完了", j_val="完了", save_val="-", arr=arr),
         unsafe_allow_html=True,
     )
-    chart_placeholder.pyplot(draw_chart(arr))
+    chart_placeholder.pyplot(draw_chart(arr, y_max=y_max))
 
     if base_image is not None:
         img_placeholder.image(base_image)
