@@ -8,7 +8,9 @@ st.set_page_config(
     page_title="ソートアルゴリズム＆流れ図ビジュアルアナライザー", layout="wide"
 )
 
-# カスタムCSS: 上部余白の削減 ＆ 文字サイズを最大1.5rem以下に制限 ＆ アラート装飾
+# ----------------------------------------------------
+# カスタムCSS: 余白縮小・フォントサイズ制限・高さを固定したポップアップ枠
+# ----------------------------------------------------
 st.markdown(
     """
     <style>
@@ -44,37 +46,44 @@ st.markdown(
     .stImage, .stPlotlyChart {
         margin-bottom: 0rem !important;
     }
-    /* アラートポップアップ風カード */
+
+    /* アラート領域の高さを42pxで完全固定（縦ズレ防止） */
+    .popup-box {
+        height: 42px !important;
+        line-height: 24px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-size: 1.0rem;
+        text-align: center;
+        margin-bottom: 8px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
     .popup-alert-swap {
         background-color: #ffebe9;
         border: 2px solid #ff4d4f;
         color: #d9363e;
-        padding: 8px 14px;
-        border-radius: 8px;
-        font-weight: bold;
-        font-size: 1.05rem;
-        text-align: center;
-        margin-bottom: 8px;
-        box-shadow: 0 4px 6px rgba(255, 77, 79, 0.15);
+        box-shadow: 0 3px 6px rgba(255, 77, 79, 0.15);
     }
     .popup-alert-noswap {
         background-color: #e6f4ea;
         border: 2px solid #34a853;
         color: #1e7e34;
-        padding: 8px 14px;
-        border-radius: 8px;
-        font-weight: bold;
-        font-size: 1.05rem;
-        text-align: center;
-        margin-bottom: 8px;
-        box-shadow: 0 4px 6px rgba(52, 168, 83, 0.15);
+        box-shadow: 0 3px 6px rgba(52, 168, 83, 0.15);
+    }
+    .popup-alert-empty {
+        background-color: transparent;
+        border: 2px solid transparent;
+        color: transparent;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ヘッダー領域にタイトルを配置
+# ヘッダータイトル
 st.markdown("<h1>ソートアルゴリズム＆流れ図ビジュアライザ</h1>", unsafe_allow_html=True)
 
 # サイドバー設定
@@ -95,7 +104,7 @@ except ValueError:
     st.error("数字をカンマ区切りで入力してください。")
     initial_data = [64, 34, 25, 12, 22]
 
-# y軸の最大値を初期データに基づいて固定（余白25%）
+# y軸最大値の固定
 FIXED_Y_MAX = max(initial_data) * 1.25 if len(initial_data) > 0 else 100
 
 # 画像アップロード機能
@@ -106,12 +115,10 @@ uploaded_file = st.sidebar.file_uploader(
 
 start_button = st.sidebar.button("ソート実行", type="primary")
 
-# 3カラムレイアウト（左：流れ図、中央：変数トレース、右：グラフ）
+# 3カラムレイアウト
 col_left, col_mid, col_right = st.columns([1.0, 0.6, 1.2])
 
-# ----------------------------------------------------
-# 1. 左カラム: 実行状態テキスト(上) ＋ 流れ図画像(下)
-# ----------------------------------------------------
+# 1. 左カラム: 実行状態 ＋ 流れ図
 with col_left:
     st.markdown("### 📌 実行状態と流れ図")
     status_placeholder = st.empty()
@@ -134,19 +141,15 @@ with col_left:
             "👈 サイドバーから流れ図画像をドラッグ＆ドロップしてください。"
         )
 
-# ----------------------------------------------------
-# 2. 中央カラム: 変数トレース表示
-# ----------------------------------------------------
+# 2. 中央カラム: 変数トレース
 with col_mid:
     st.markdown("### 🔍 変数トレース")
     trace_placeholder = st.empty()
 
-# ----------------------------------------------------
-# 3. 右カラム: ポップアップ ＋ ソートアニメーション棒グラフ
-# ----------------------------------------------------
+# 3. 右カラム: ポップアップ(固定高) ＋ グラフ
 with col_right:
     st.markdown("### 📊 ソートアニメーション")
-    popup_placeholder = st.empty()  # アニメーション上のポップアップ表示用
+    popup_placeholder = st.empty()
     chart_placeholder = st.empty()
 
 
@@ -358,25 +361,21 @@ def update_display(
     j_idx=None,
     swap_stage=None,
     y_max=FIXED_Y_MAX,
-    popup_state=None,  # 'swap' (交換する) または 'no_swap' (交換しない) または None
-    speed_factor=1.0,  # 通常1.0、交換時 1/3（3倍速）
+    popup_state=None,  # 'swap', 'no_swap', or None
+    speed_factor=1.0,  # 速度調整用
 ):
-    """全要素の一括更新（速度制御 & ポップアップ追加）"""
+    """画面要素の一括更新"""
     status_placeholder.markdown(f"> **{node_text}**")
 
-    # ポップアップアラートの更新
+    # 高さ固定(42px)のポップアップ領域更新（表示内容にかかわらず高さが変動しない）
     if popup_state == "swap":
-        popup_placeholder.markdown(
-            '<div class="popup-alert-swap">🚨 【判定結果】 交換する (YES)</div>',
-            unsafe_allow_html=True,
-        )
+        popup_html = '<div class="popup-box popup-alert-swap">🚨 【判定結果】 交換する (YES)</div>'
     elif popup_state == "no_swap":
-        popup_placeholder.markdown(
-            '<div class="popup-alert-noswap">✅ 【判定結果】 交換しない (NO)</div>',
-            unsafe_allow_html=True,
-        )
-    elif popup_state == "clear":
-        popup_placeholder.empty()
+        popup_html = '<div class="popup-box popup-alert-noswap">✅ 【判定結果】 交換しない (NO)</div>'
+    else:
+        popup_html = '<div class="popup-box popup-alert-empty">&nbsp;</div>'
+
+    popup_placeholder.markdown(popup_html, unsafe_allow_html=True)
 
     trace_placeholder.markdown(
         draw_trace_table(i_val, j_val, save_val, arr, j_idx),
@@ -387,27 +386,35 @@ def update_display(
         arrow_img = draw_arrow_on_image(base_image, y_ratio)
         img_placeholder.image(arrow_img)
 
-    chart_placeholder.pyplot(
-        draw_chart(
-            arr,
-            active_indices=active_indices,
-            swapped=swapped,
-            save_val=save_val,
-            swap_stage=swap_stage,
-            j_idx=j_idx,
-            y_max=y_max,
-        )
+    fig = draw_chart(
+        arr,
+        active_indices=active_indices,
+        swapped=swapped,
+        save_val=save_val,
+        swap_stage=swap_stage,
+        j_idx=j_idx,
+        y_max=y_max,
     )
+    chart_placeholder.pyplot(fig)
+    plt.close(fig)  # メモリ解放とリビルド処理の高速化
 
-    # 3倍速制御 (speed_factor = 1/3)
-    time.sleep(speed * speed_factor)
+    # 実効タイマー（交換時は 1/6 スピード ＝ 大幅高速化）
+    sleep_time = max(0.02, speed * speed_factor)
+    time.sleep(sleep_time)
 
 
-# 初期画面
+# 初期状態の表示
+popup_placeholder.markdown(
+    '<div class="popup-box popup-alert-empty">&nbsp;</div>',
+    unsafe_allow_html=True,
+)
 trace_placeholder.markdown(
     draw_trace_table(arr=initial_data), unsafe_allow_html=True
 )
 chart_placeholder.pyplot(draw_chart(initial_data, y_max=FIXED_Y_MAX))
+
+# 交換ステップの超高速化用定数 (通常の 1/6 ＝ 約6倍速)
+FAST_SPEED_FACTOR = 1.0 / 6.0
 
 # ソート実行
 if start_button:
@@ -436,7 +443,7 @@ if start_button:
                 j_val="-",
                 save_val=save,
                 y_max=y_max,
-                popup_state="clear",
+                popup_state=None,
             )
 
             for j in range(0, i + 1):
@@ -450,7 +457,7 @@ if start_button:
                     save_val=save,
                     j_idx=j,
                     y_max=y_max,
-                    popup_state="clear",
+                    popup_state=None,
                 )
 
                 # 条件判定
@@ -470,8 +477,8 @@ if start_button:
                         speed_factor=1.0,
                     )
 
-                    # --- 交換処理（3倍速: speed_factor = 1/3） ---
-                    # 1. pointT(j) -> save へ退避 (3倍速)
+                    # --- 交換処理（6倍速: speed_factor = 1/6） ---
+                    # 1. pointT(j) -> save へ退避
                     save = arr[j]
                     update_display(
                         f"【退避】 pointT({j}) [{save}] ➔ save",
@@ -485,10 +492,10 @@ if start_button:
                         swap_stage="to_save",
                         y_max=y_max,
                         popup_state="swap",
-                        speed_factor=1 / 3.0,  # ⚡ 3倍速
+                        speed_factor=FAST_SPEED_FACTOR,  # ⚡ 6倍速
                     )
 
-                    # 2. pointT(j+1) -> pointT(j) へ代入 (3倍速)
+                    # 2. pointT(j+1) -> pointT(j) へ代入
                     arr[j] = arr[j + 1]
                     update_display(
                         f"【代入】 pointT({j+1}) [{arr[j+1]}] ➔ pointT({j})",
@@ -502,10 +509,10 @@ if start_button:
                         swap_stage="shift",
                         y_max=y_max,
                         popup_state="swap",
-                        speed_factor=1 / 3.0,  # ⚡ 3倍速
+                        speed_factor=FAST_SPEED_FACTOR,  # ⚡ 6倍速
                     )
 
-                    # 3. save -> pointT(j+1) へ戻し (3倍速)
+                    # 3. save -> pointT(j+1) へ戻し
                     arr[j + 1] = save
                     update_display(
                         f"【戻し】 save [{save}] ➔ pointT({j+1}) (交換完了)",
@@ -520,7 +527,7 @@ if start_button:
                         swap_stage="from_save",
                         y_max=y_max,
                         popup_state="swap",
-                        speed_factor=1 / 3.0,  # ⚡ 3倍速
+                        speed_factor=FAST_SPEED_FACTOR,  # ⚡ 6倍速
                     )
                 else:
                     # アラート「交換しない (NO)」を表示
@@ -550,7 +557,7 @@ if start_button:
                 j_val="-",
                 save_val=save,
                 y_max=y_max,
-                popup_state="clear",
+                popup_state=None,
             )
 
             for j in range(i + 1, n):
@@ -596,7 +603,7 @@ if start_button:
                     swap_stage="to_save",
                     y_max=y_max,
                     popup_state="swap",
-                    speed_factor=1 / 3.0,  # ⚡ 3倍速
+                    speed_factor=FAST_SPEED_FACTOR,
                 )
                 arr[i] = arr[min_idx]
                 arr[min_idx] = save
@@ -613,7 +620,7 @@ if start_button:
                     swap_stage="from_save",
                     y_max=y_max,
                     popup_state="swap",
-                    speed_factor=1 / 3.0,  # ⚡ 3倍速
+                    speed_factor=FAST_SPEED_FACTOR,
                 )
 
     elif "挿入ソート" in algorithm:
@@ -632,7 +639,7 @@ if start_button:
                 j_idx=i,
                 swap_stage="to_save",
                 y_max=y_max,
-                speed_factor=1 / 3.0,  # ⚡ 3倍速
+                speed_factor=FAST_SPEED_FACTOR,
             )
 
             while j >= 0 and arr[j] > key:
@@ -648,7 +655,7 @@ if start_button:
                     swap_stage="shift",
                     y_max=y_max,
                     popup_state="swap",
-                    speed_factor=1 / 3.0,  # ⚡ 3倍速
+                    speed_factor=FAST_SPEED_FACTOR,
                 )
                 arr[j + 1] = arr[j]
                 j -= 1
@@ -666,10 +673,13 @@ if start_button:
                 j_idx=j + 1,
                 swap_stage="from_save",
                 y_max=y_max,
-                speed_factor=1 / 3.0,  # ⚡ 3倍速
+                speed_factor=FAST_SPEED_FACTOR,
             )
 
-    popup_placeholder.empty()
+    popup_placeholder.markdown(
+        '<div class="popup-box popup-alert-empty">&nbsp;</div>',
+        unsafe_allow_html=True,
+    )
     status_placeholder.success("🎉 ソート処理が完了しました！")
     trace_placeholder.markdown(
         draw_trace_table(i_val="完了", j_val="完了", save_val="-", arr=arr),
