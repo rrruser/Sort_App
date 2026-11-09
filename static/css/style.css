@@ -1,0 +1,212 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+    background-color: #f4f6f8;
+    color: #333;
+    padding: 0.5rem 1rem;
+}
+
+.app-header h1 {
+    font-size: 1.35rem;
+    color: #212529;
+    margin-bottom: 0.4rem;
+}
+
+.main-container {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+/* サイドバー */
+.sidebar {
+    width: 250px;
+    background: #fff;
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
+.sidebar h2 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.form-group input[type="text"],
+.form-group select {
+    width: 100%;
+    padding: 5px 8px;
+    font-size: 0.85rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.drop-zone {
+    border: 2px dashed #0d6efd;
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 0.78rem;
+    color: #0d6efd;
+    background-color: #f0f7ff;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 8px;
+    background-color: #0d6efd;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+}
+
+/* メインコンテンツ (3カラム) */
+.content-area {
+    display: flex;
+    flex-grow: 1;
+    gap: 12px;
+}
+
+.col-left { flex: 1.0; min-width: 0; }
+.col-mid  { flex: 0.65; min-width: 0; }
+.col-right{ flex: 1.25; min-width: 0; }
+
+h3 {
+    font-size: 1.0rem;
+    margin-bottom: 6px;
+}
+
+/* 実行状態テキスト */
+.status-box {
+    background-color: #e9ecef;
+    border-left: 4px solid #0d6efd;
+    padding: 6px 10px;
+    font-size: 0.88rem;
+    font-weight: bold;
+    margin-bottom: 8px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+}
+
+/* 流れ図表示エリア */
+.image-wrapper {
+    position: relative;
+    width: 100%;
+    max-height: 480px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.img-placeholder {
+    padding: 20px;
+    font-size: 0.85rem;
+    color: #6c757d;
+    text-align: center;
+}
+
+#flowchartCanvas {
+    max-height: 480px;
+    width: auto;
+}
+
+/* 変数トレース */
+.trace-card {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.trace-card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.trace-card td {
+    padding: 6px 4px;
+    border-bottom: 1px solid #eee;
+}
+
+.trace-card .val {
+    text-align: right;
+    font-weight: bold;
+    font-size: 1.05rem;
+}
+
+.blue { color: #0d6efd; }
+.red { color: #dc3545; }
+.green { color: #198754; }
+
+/* ポップアップアラート (高さ42px 完全固定で縦ゆれ解消) */
+.popup-box {
+    height: 42px;
+    line-height: 38px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.95rem;
+    text-align: center;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+}
+
+.popup-swap {
+    background-color: #ffebe9;
+    border: 2px solid #ff4d4f;
+    color: #d9363e;
+}
+
+.popup-noswap {
+    background-color: #e6f4ea;
+    border: 2px solid #34a853;
+    color: #1e7e34;
+}
+
+.popup-empty {
+    background-color: transparent;
+    border: 2px solid transparent;
+}
+
+/* 棒グラフCanvas */
+.canvas-container {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 6px;
+}
+
+#sortCanvas {
+    width: 100%;
+    height: 350px;
+}
